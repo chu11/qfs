@@ -690,7 +690,8 @@ private:
         int      inSysError,
         int64_t  inIoByteCount,
         bool     inFreeBuffersIfNoIoCompletion = false,
-        BlockIdx inBlockIdx                    = -1)
+        BlockIdx inBlockIdx                    = -1,
+        std::string inPathError                = "")
     {
         QCASSERT(mMutex.IsOwned());
         QCRTASSERT(
@@ -728,7 +729,8 @@ private:
                     inReq.mBufferCount,
                     inError,
                     inSysError,
-                    inIoByteCount)) {
+                    inIoByteCount,
+                    inPathError)) {
                 // Free buffers.
                 BuffersIterator theItr(*this, inReq, inReq.mBufferCount);
                 mBufferPoolPtr->Put(theItr, inReq.mBufferCount);
@@ -1557,17 +1559,20 @@ QCDiskQueue::Queue::ProcessMeta(
     int64_t  theRetCount = 0;
     int      theSysErr   = 0;
     Error    theError    = kErrorNone;
+    std::string thePathErr  = "";
     switch (theReqType) {
         case kReqTypeDelete:
             if (unlink(theNamePtr)) {
                 theSysErr = errno;
                 theError  = kErrorDelete;
+                thePathErr = theNamePtr;
             }
             break;
         case kReqTypeRename:
             if (rename(theNamePtr, theNamePtr + theNextNameStart)) {
                 theSysErr = errno;
                 theError  = kErrorRename;
+                thePathErr = theNamePtr;
             }
             break;
         case kReqTypeGetFsAvailable: {
@@ -1575,6 +1580,7 @@ QCDiskQueue::Queue::ProcessMeta(
                 if (GetFsAvailable(theNamePtr, theRetCount, theTotalCount)) {
                     theSysErr = errno;
                     theError  = kErrorGetFsAvailable;
+                    thePathErr = theNamePtr;
                 } else {
                     theBlkIdx = (BlockIdx)(theTotalCount / theBlockSize);
                 }
@@ -1585,11 +1591,13 @@ QCDiskQueue::Queue::ProcessMeta(
                 if (stat(theNamePtr, &theStat)) {
                     theSysErr = errno;
                     theError  = kErrorCheckDirReadable;
+                    thePathErr = theNamePtr;
                 } else {
                     DIR* const theDirPtr = opendir(theNamePtr);
                     if (! theDirPtr) {
                         theSysErr = errno;
                         theError  = kErrorCheckDirReadable;
+                        thePathErr = theNamePtr;
                     } else {
                         if (closedir(theDirPtr)) {
                             theSysErr = errno;
@@ -1627,7 +1635,8 @@ QCDiskQueue::Queue::ProcessMeta(
     }
 
     theUnlock.Lock();
-    RequestComplete(inReq, theError, theSysErr, theRetCount, false, theBlkIdx);
+    RequestComplete(inReq, theError, theSysErr, theRetCount, false, theBlkIdx,
+                    thePathErr);
 }
 
     QCDiskQueue::OpenFileStatus
@@ -1937,7 +1946,8 @@ public:
         int            inBufferCount,
         Error          inCompletionCode,
         int            inSysErrorCode,
-        int64_t        inIoByteCount)
+        int64_t        inIoByteCount,
+        std::string    inPathError)
     {
         QCStMutexLocker theLocker(mMutex);
         mDoneFlag = true;

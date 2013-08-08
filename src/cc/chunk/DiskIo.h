@@ -273,6 +273,7 @@ private:
     size_t                 mReadLength;
     int64_t                mBlockIdx;
     int64_t                mIoRetCode;
+    string                 mPathError;
     time_t                 mEnqueueTime;
     bool                   mWriteSyncFlag;
     QCDiskQueue::RequestId mCompletionRequestId;
@@ -293,7 +294,8 @@ private:
         int                         inBufferCount,
         QCDiskQueue::Error          inCompletionCode,
         int                         inSysErrorCode,
-        int64_t                     inIoByteCount);
+        int64_t                     inIoByteCount,
+        string                      inPathError);
 
     enum MetaOpType
     {

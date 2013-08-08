@@ -732,6 +732,7 @@ public:
                 IoQueue::Remove(mIoDoneQueuePtr, inIo);
             } else if (inIo.mCompletionCode == QCDiskQueue::kErrorCancel) {
                 inIo.mIoRetCode = -ETIMEDOUT;
+                inIo.mPathError = "";
             }
         } else {
             QCASSERT(IoQueue::IsInList(mIoInFlightQueuePtr, inIo));
@@ -740,6 +741,7 @@ public:
                 inIo.mCompletionRequestId = inIo.mRequestId;
                 inIo.mCompletionCode      = QCDiskQueue::kErrorCancel;
                 inIo.mIoRetCode           = -ETIMEDOUT;
+                inIo.mPathError           = "";
                 IoQueue::PushBack(mIoDoneQueuePtr, inIo);
             }
         }
@@ -1023,7 +1025,8 @@ private:
             int                         /* inBufferCount */,
             QCDiskQueue::Error          /* inCompletionCode */,
             int                         /* inSysErrorCode */,
-            int64_t                     /* inIoByteCount */)
+            int64_t                     /* inIoByteCount */,
+            string                      /* inPathError */)
         {
             delete this; // This might release buffers.
             return true; // Tell the caller not to release buffers.
@@ -1755,6 +1758,7 @@ DiskIo::DiskIo(
       mReadLength(0),
       mBlockIdx(0),
       mIoRetCode(0),
+      mPathError(""),
       mEnqueueTime(),
       mWriteSyncFlag(false),
       mCompletionRequestId(QCDiskQueue::kRequestIdNone),
@@ -1812,6 +1816,7 @@ DiskIo::Read(
         return -EINVAL;
     }
     mIoRetCode     = 0;
+    mPathError     = "";
     mBlockIdx      = -1;
     mReadBufOffset = inOffset % theBlockSize;
     mReadLength    = inNumBytes;
@@ -1868,6 +1873,7 @@ DiskIo::Write(
     }
     mReadLength    = 0;
     mIoRetCode     = 0;
+    mPathError     = "";
     mBlockIdx      = -1;
     mReadBufOffset = 0;
     mIoBuffers.clear();
@@ -2013,7 +2019,8 @@ DiskIo::Done(
     int                         inBufferCount,
     QCDiskQueue::Error          inCompletionCode,
     int                         inSysErrorCode,
-    int64_t                     inIoByteCount)
+    int64_t                     inIoByteCount,
+    string                      inPathError)
 {
     QCASSERT(sDiskIoQueuesPtr);
     bool theOwnBuffersFlag = false;
@@ -2057,6 +2064,7 @@ DiskIo::Done(
             theOwnBuffersFlag = true;
         }
     }
+    mPathError = inPathError;
     sDiskIoQueuesPtr->Put(*this, inRequestId, inCompletionCode);
     return theOwnBuffersFlag;
 }
@@ -2125,6 +2133,10 @@ DiskIo::RunCompletion()
         string theErrMsg(QCDiskQueue::ToString(mCompletionCode));
         theErrMsg += " ";
         theErrMsg += QCUtils::SysError(-theNumRead);
+        if (mPathError.length() > 0) {
+            theErrMsg += " ";
+            theErrMsg += mPathError;
+        }
         KFS_LOG_STREAM(theMetaFlag ?
                 MsgLogger::kLogLevelINFO : MsgLogger::kLogLevelERROR) <<
             theOpNamePtr <<

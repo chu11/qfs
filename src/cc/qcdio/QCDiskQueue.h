@@ -41,6 +41,7 @@
 #define QCDISKQUEUE_H
 
 #include <stdint.h>
+#include <string>
 #include "QCIoBufferPool.h"
 #include "QCMutex.h"
 #include "QCThread.h"
@@ -199,7 +200,8 @@ public:
             int            inBufferCount,
             Error          inCompletionCode,
             int            inSysErrorCode,
-            int64_t        inIoBytes) = 0;
+            int64_t        inIoBytes,
+            std::string    inPathError) = 0;
     protected:
         IoCompletion()
             {}
